@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel='stylesheet' href='./node_modules/bootstrap/dist/css/bootstrap.css'/>
+  <script>if (typeof module === 'object') { window.module = module; module = undefined; }</script>
+</head>
+
+<body>
+  <div class="container">
+    <form>
+      <div class="form-row">
+        <div class="form-group col-md-4">
+          <label>server ip: </label>
+          <input type="text" class="form-control" id="serverIp" value="172.18.146.19">
+          <div class="invalid-feedback">
+            服务端地址不能为空
+          </div>
+        </div>
+        <div class="form-group col-md-2">
+          <label> port: </label>
+          <input type="number" class="form-control" id="serverPort" value="6000">
+          <div class="invalid-feedback">
+            服务端端口不能为空
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row" id="multicastForm" hidden>
+        <div class="form-group col-md-4">
+          <label>multicast ip: </label>
+          <input type="text" class="form-control" id="multicastIp">
+        </div>
+        <div class="form-group col-md-2">
+          <label> port: </label>
+          <input type="number" class="form-control" id="multicastPort">
+        </div>
+      </div>
+
+      <div class="form-row input-group mb-3 custom-file">
+          <input type="file" class="custom-file-input form-control" id="inputFile" required>
+          <div class="invalid-feedback">
+            输入文件不能为空
+          </div>
+          <label class="custom-file-label" for="inputFile" aria-describedby="inputGroupFileAddon02">Choose file</label>
+      </div>
+
+      <div class="form-group form-check">
+        <input type="checkbox" class="form-check-input" id="useTCP" checked="checked">
+        <label class="form-check-label"> Use TCP</label>
+      </div>
+
+      <div class="form-group">
+        <button class="btn btn-outline-primary" id="sendButton" role="button">Start server</button>
+        <button class="btn btn-outline-primary" id="cancelButton" role="button" hidden>Stop</button>
+      </div>
+    </form>
+    <div class="row">
+      <ul class="list-group list-group-flush pre-scrollable col-md-4" id="clientList">
+      </ul>
+      <div class="form-group col-md-8">
+        <label>输出</label>
+        <textarea class="form-control pre-scrollable" rows=10 id="outputArea" readonly="readonly"></textarea>
+      </div>
+    </div> 
+  </div>
+
+  <script src='./node_modules/jquery/dist/jquery.js'></script>
+  <script src='./action.js'></script>
+  <script src='./node_modules/bootstrap/dist/js/bootstrap.js'></script>
+  <script>if(window.module) module = window.module; </script>
+</body>
+
+</html>
