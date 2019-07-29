@@ -1,8 +1,36 @@
 const FileTransfer = require('./ffi/file_transfer.js')
+const util = require('util')
 let clientGroup = new Array();
 let logMessage = '';
 
+function getTimeStamp(){
+  var timestamp = Date.parse(new Date());
+  var newDate = new Date();
+  newDate.setTime(timestamp);
+  return util.format('[%d:%d:%d] ', newDate.getHours(), newDate.getMinutes(), newDate.getSeconds());
+}
+
+Date.prototype.Format = function(fmt)   
+{    
+  var o = {   
+    "M+" : this.getMonth()+1,                 //月份   
+    "d+" : this.getDate(),                    //日   
+    "h+" : this.getHours(),                   //小时   
+    "m+" : this.getMinutes(),                 //分   
+    "s+" : this.getSeconds(),                 //秒   
+    "q+" : Math.floor((this.getMonth()+3)/3), //季度   
+    "S"  : this.getMilliseconds()             //毫秒   
+  };   
+  if(/(y+)/.test(fmt))   
+    fmt=fmt.replace(RegExp.$1, (this.getFullYear()+"").substr(4 - RegExp.$1.length));   
+  for(var k in o)   
+    if(new RegExp("("+ k +")").test(fmt))   
+  fmt = fmt.replace(RegExp.$1, (RegExp.$1.length==1) ? (o[k]) : (("00"+ o[k]).substr((""+ o[k]).length)));   
+  return '[' + fmt + '] ';   
+} 
+
 function ShowLog(message) {
+  message = new Date().Format("hh:mm:ss.S") + message;
   console.log(message);
   logMessage = logMessage + message + '\n';
   $("#outputArea").val(logMessage);
@@ -16,6 +44,7 @@ function FlashClientList() {
     client = clientGroup[idx]
     clientList.append("<li class='list-group-item'>"+client.remoteAddress + ':' + client.remotePort+'</li>');
   }
+  $("#clientCount").html(clientGroup.length);
 }
 
 function NotifyAllClient(serverIp, serverPort, multicastIp, multicastPort) {
@@ -105,6 +134,7 @@ server.on("error",function(exception){
 $(".custom-file-input").on("change", function() {
   var fileName = $(this).val().split("\\").pop();
   $(this).siblings(".custom-file-label").addClass("selected").html(fileName);
+  CheckInputs();
 });
 
 let serverIp;

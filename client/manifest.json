@@ -1,0 +1,30 @@
+{
+  "app": {
+    "background": {
+      "persistent": false,
+      "scripts": [
+       "background.js"
+      ]
+    }
+  },
+  "icons": {
+    "16": "images/cast16.png",
+    "32": "images/cast32.png",
+    "48": "images/cast48.png",
+    "128": "images/cast128.png"
+  },
+  "manifest_version": 2,
+  "name": "FileTransferTest",
+  "permissions": [
+    "fileSystem",
+    "fileSystem.directory",
+    "seewoos.fileTransfer"
+  ],
+  "sockets": {
+    "tcp": {
+      "connect": "*"
+    }
+  },
+
+  "version": "0.1.0"
+}

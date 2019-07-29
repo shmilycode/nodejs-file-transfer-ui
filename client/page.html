@@ -1,0 +1,50 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel='stylesheet' href='./js/bootstrap.css'/>
+</head>
+
+<body>
+  <div class="container">
+    <form>
+      <div class="form-row">
+        <div class="form-row form-group col-md-4">
+          <label>server ip: </label>
+          <input type="text" class="form-control" id="serverIp" value="192.168.1.189">
+          <div class="invalid-feedback">
+            服务端地址不能为空
+          </div>
+        </div>
+        <!--div class="form-group col-md-2">
+          <label> port: </label>
+          <input type="number" class="form-control" id="serverPort" value="6666">
+        </div-->
+      </div>
+
+      <div class="form-row input-group mb-3">
+        <input type="text" class="form-control" id="pathToSave">
+        <div class="input-group-append">
+          <button class="btn btn-outline-secondary" type="button" id="chooseFolderButton">选择目录</button>
+        </div>
+        <div class="invalid-feedback">
+          存储路径不能为空
+        </div>
+      </div>
+
+      <div class="form-group">
+        <button class="btn btn-outline-primary" id="connectButton" role="button">Connect</button>
+        <button class="btn btn-outline-primary" id="cancelButton" role="button">Stop</button>
+      </div>
+    </form>
+    <div class="row">
+      <div class="form-group col-md-8">
+        <label>输出</label>
+        <textarea class="form-control pre-scrollable" rows=10 id="outputArea" readonly="readonly"></textarea>
+      </div>
+    </div> 
+  </div>
+
+  <script src='./js/jquery.min.js'></script>
+  <script src='./js/bootstrap.min.js'></script>
+  <script src='./page.js'></script>
+</body>

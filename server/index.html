@@ -12,7 +12,7 @@
       <div class="form-row">
         <div class="form-group col-md-4">
           <label>server ip: </label>
-          <input type="text" class="form-control" id="serverIp" value="172.18.146.19">
+          <input type="text" class="form-control" id="serverIp" value="192.168.1.189">
           <div class="invalid-feedback">
             服务端地址不能为空
           </div>
@@ -53,6 +53,7 @@
       <div class="form-group">
         <button class="btn btn-outline-primary" id="sendButton" role="button">Start server</button>
         <button class="btn btn-outline-primary" id="cancelButton" role="button" hidden>Stop</button>
+        <span class="badge badge-secondary" id="clientCount">0</span>
       </div>
     </form>
     <div class="row">

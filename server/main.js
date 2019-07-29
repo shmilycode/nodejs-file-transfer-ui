@@ -8,7 +8,7 @@ function createWindow(){
     win = new BrowserWindow(windowConfig);
     win.loadURL(`file://${__dirname}/index.html`);
     //开启调试工具
-//    win.webContents.openDevTools();
+    win.webContents.openDevTools();
     win.setMenuBarVisibility(false);
     win.on('close',() => {
         //回收BrowserWindow对象
