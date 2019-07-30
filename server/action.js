@@ -1,4 +1,5 @@
 const FileTransfer = require('./ffi/file_transfer.js')
+const {ipcRenderer} = require('electron');
 const util = require('util')
 let clientGroup = new Array();
 let logMessage = '';
@@ -161,3 +162,8 @@ $("#cancelButton").on('click', function() {
   ShowLog("Close file transfer channel");
   return false;
 });
+
+window.addEventListener('keyup', (e) => {
+  //开启调试工具
+  ipcRenderer.send('open-devtools')
+}, true)
