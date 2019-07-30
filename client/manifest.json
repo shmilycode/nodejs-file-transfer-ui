@@ -8,10 +8,10 @@
     }
   },
   "icons": {
-    "16": "images/cast16.png",
-    "32": "images/cast32.png",
-    "48": "images/cast48.png",
-    "128": "images/cast128.png"
+    "16": "images/happy-line-16.png",
+    "32": "images/happy-line-32.png",
+    "48": "images/happy-line-48.png",
+    "128": "images/happy-line-128.png"
   },
   "manifest_version": 2,
   "name": "FileTransferTest",

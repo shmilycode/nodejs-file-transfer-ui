@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "electron .",
-    "packager": "electron-packager ./ FileTransferServer  --platform win32 --arch ia32 --out ./outApp --electron-version 3.1.12 --overwrite"
+    "packager": "electron-packager ./ FileTransferServer  --platform win32 --arch ia32 --out ./outApp --electron-version 3.1.12 --overwrite --icon icon/happy-line-256.ico"
   },
   "author": "",
   "license": "ISC",
