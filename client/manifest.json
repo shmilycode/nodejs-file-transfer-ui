@@ -22,7 +22,8 @@
   ],
   "sockets": {
     "tcp": {
-      "connect": "*"
+      "connect": "*",
+      "send": "*"
     }
   },
 

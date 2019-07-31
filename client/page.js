@@ -33,6 +33,15 @@ function ReceiveUnreliable(serverIp, serverPort, multicastIp, multicastPort, pat
   })
 };
 
+function str2ab(str) {
+  var buf = new ArrayBuffer(str.length*2); // 2 bytes for each char
+  var bufView = new Uint16Array(buf);
+  for (var i=0, strLen=str.length; i < strLen; i++) {
+    bufView[i] = str.charCodeAt(i);
+  }
+  return buf;
+}
+
 function ReceiveReliable(serverIp, serverPort, path) {
   ShowLog("Start tcp receive.");
   if (globalChannelId != -1) {
@@ -48,6 +57,9 @@ function ReceiveReliable(serverIp, serverPort, path) {
             ShowLog("Receive file failed, error code: "+status);
         } else {
             ShowLog("Receive file success!!");
+            chrome.sockets.tcp.send(client, str2ab("I'm OK!"), (info)=>{
+              ShowLog("Notify server result " + info.resultCode);
+            });
         }
         closeChannel();
       });

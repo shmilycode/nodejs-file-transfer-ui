@@ -7,6 +7,8 @@
 
 客户端是electron程序，由nodejs编写，使用时需要先安装nodejs，electron, ffi, ref组件。
 
+直接使用的话，只需要把根目录下的FileTransferClient.zip和FileTransferServer-win32-ia32.zip下载下来，然后解压就能用，前者是客户端chrome app插件，后都是windows服务端，这样就不需要按上面的步骤进行操作。
+
 # 交互介绍
 
 1. 在chromebook上运行客户端，然后在windows10上运行服务端。

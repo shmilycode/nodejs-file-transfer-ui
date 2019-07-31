@@ -105,7 +105,7 @@ var server = net.createServer(function(socket){
   clientGroup.push(socket)
   FlashClientList();
   socket.on('data', function(data) {
-    ShowLog('recv: ' + data);
+    ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ' said: ' + data);
   });
 
   socket.on('error',function(exception){
