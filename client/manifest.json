@@ -17,8 +17,9 @@
   "name": "FileTransferTest",
   "permissions": [
     "fileSystem",
-    "fileSystem.directory"
-//    "seewoos.fileTransfer"
+    "fileSystem.directory",
+    "seewoos.fileTransfer",
+    "storage"
   ],
   "sockets": {
     "tcp": {

@@ -1,10 +1,21 @@
 const FileTransfer = require('./ffi/file_transfer.js')
 const {ipcRenderer} = require('electron');
+const LocalStorage = require('node-localstorage').LocalStorage
 const util = require('util')
 let clientGroup = new Array();
 let heartbeatTimerMap = {}
 let heartbeatTimeout = 6000
 let logMessage = '';
+let localStorage = new LocalStorage('./setting.cf')
+
+function initElement() {
+  if (localStorage.length == 0)
+    return;
+  $('#serverIp').val(localStorage.getItem('serverIp'))
+  $('#serverPort').val(localStorage.getItem('serverPort'))
+  $('#multicastIp').val(localStorage.getItem('multicastIp'))
+  $('#multicastPort').val(localStorage.getItem('multicastPort'))
+}
 
 function getTimeStamp(){
   var timestamp = Date.parse(new Date());
@@ -15,7 +26,7 @@ function getTimeStamp(){
 
 Date.prototype.Format = function(fmt)   
 {    
-  var o = {   
+  var o = {
     "M+" : this.getMonth()+1,                 //月份   
     "d+" : this.getDate(),                    //日   
     "h+" : this.getHours(),                   //小时   
@@ -183,6 +194,13 @@ $("#sendButton").on('click', function() {
   multicastIp = $('#multicastIp').val();
   multicastPort = Number($('multicastPort').val());
   fileToSend = $('#inputFile').prop('files')[0].path
+
+  //storage
+  localStorage.setItem('serverIp', serverIp)
+  localStorage.setItem('serverPort', serverPort)
+  localStorage.setItem('multicastIp', multicastIp)
+  localStorage.setItem('multicastPort', multicastPort)
+
   sendFileByTCP(serverIp, serverPort, fileToSend);
   NotifyAllClient(serverIp, serverPort, multicastIp, multicastPort);
   console.log("on click: "+serverIp+serverPort+multicastIp+multicastPort)
@@ -201,3 +219,5 @@ window.addEventListener('keyup', (e) => {
   if (e.code === "F12")
     ipcRenderer.send('open-devtools')
 }, true)
+
+initElement();

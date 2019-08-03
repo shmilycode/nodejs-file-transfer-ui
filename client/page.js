@@ -184,7 +184,6 @@ $("#chooseFolderButton").on("click", function() {
       ShowLog("Save to path "+path);
       $("#pathToSave").val(path);
       CheckInputs();
-        // do something with path
     });
   });
 });
@@ -193,9 +192,11 @@ $("#connectButton").on('click', function(){
   if (!CheckInputs())
     return false;
   serverIp = $('#serverIp').val();
+  pathToSave = $("#pathToSave").val()
   serverPort = 6669;
 
   ShowLog("Try connecting to " +serverIp + ":" + serverPort); 
+  chrome.storage.local.set({serverIp: serverIp, pathToSave: pathToSave}, ()=>{})
   chrome.sockets.tcp.create({}, function(createInfo){
     client = createInfo.socketId;
     chrome.sockets.tcp.connect(client, serverIp, serverPort, 
@@ -211,9 +212,14 @@ $("#connectButton").on('click', function(){
       });
   });
   return false;
-});
-
+}); 
+ 
 $("#cancelButton").on('click', function() {
   closeChannel();
   return false;
+});
+
+chrome.storage.local.get(['serverIp', 'pathToSave'], (result)=>{
+  $('#serverIp').val(result.serverIp)
+  $('#pathToSave').val(result.pathToSave)
 });
