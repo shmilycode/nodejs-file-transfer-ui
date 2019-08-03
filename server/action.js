@@ -2,6 +2,8 @@ const FileTransfer = require('./ffi/file_transfer.js')
 const {ipcRenderer} = require('electron');
 const util = require('util')
 let clientGroup = new Array();
+let heartbeatTimerMap = {}
+let heartbeatTimeout = 6000
 let logMessage = '';
 
 function getTimeStamp(){
@@ -46,6 +48,12 @@ function FlashClientList() {
     clientList.append("<li class='list-group-item'>"+client.remoteAddress + ':' + client.remotePort+'</li>');
   }
   $("#clientCount").html(clientGroup.length);
+}
+
+function responseHeartbeat(client) {
+  notifyMessage = {"action": "heartbeat"};
+  client.setEncoding('utf8');
+  client.write(JSON.stringify(notifyMessage));
 }
 
 function NotifyAllClient(serverIp, serverPort, multicastIp, multicastPort) {
@@ -93,31 +101,56 @@ function CheckInputs() {
     }
     else {
       $(elem[i]).removeClass('is-invalid')
-    }
-  }
+    } }
   return true;
+}
+
+function removeClient(client) {
+  clientGroup.splice(jQuery.inArray(client, clientGroup), 1)
+  clearTimeout(heartbeatTimerMap[client])
+  delete heartbeatTimerMap[client]
+  FlashClientList()
+}
+
+function addClient(client) {
+  clientGroup.push(client)
+  if (client in heartbeatTimerMap)
+    ShowLog("Error client " + client.remoteAddress + " has exist!!!");
+  heartbeatTimerMap[client] = setTimeout(heartbeatTimeoutHandler, heartbeatTimeout, client)
+  FlashClientList();
+}
+
+function heartbeatTimeoutHandler(client) {
+  ShowLog("socket " + client.remoteAddress + " timeout and closed!")
+  client.end("test");
+  removeClient(client);
 }
 
 //server
 const net = require('net')
 var server = net.createServer(function(socket){
-  console.log('connect: ' + socket.remoteAddress + ' : ' + socket.remotePort);
-  clientGroup.push(socket)
-  FlashClientList();
+  ShowLog('connect: ' + socket.remoteAddress + ' : ' + socket.remotePort);
+  addClient(socket);
+
   socket.on('data', function(data) {
-    ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ' said: ' + data);
+    clearTimeout(heartbeatTimerMap[socket]);
+    message = String.fromCharCode.apply(null, new Uint8Array(data));
+    if (data == 'hb' || message == 'hb'){
+      responseHeartbeat(socket);
+    } else {
+      ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ' said: ' + data);
+    }
+    heartbeatTimerMap[socket] = setTimeout(heartbeatTimeoutHandler, heartbeatTimeout, client)
   });
 
   socket.on('error',function(exception){
     ShowLog('socket error:' + exception);
-    clientGroup.splice(jQuery.inArray(socket, clientGroup), 1);
-    FlashClientList();
+    removeClient(socket);
     socket.end();
   });
 
   socket.on('close', function(data) {
-    clientGroup.splice(jQuery.inArray(socket, clientGroup), 1);
-    FlashClientList();
+    removeClient(socket);
     ShowLog('close: ' +
           socket.remoteAddress + ' ' + socket.remotePort);
   });
@@ -165,5 +198,6 @@ $("#cancelButton").on('click', function() {
 
 window.addEventListener('keyup', (e) => {
   //开启调试工具
-  ipcRenderer.send('open-devtools')
+  if (e.code === "F12")
+    ipcRenderer.send('open-devtools')
 }, true)

@@ -34,8 +34,8 @@ function ReceiveUnreliable(serverIp, serverPort, multicastIp, multicastPort, pat
 };
 
 function str2ab(str) {
-  var buf = new ArrayBuffer(str.length*2); // 2 bytes for each char
-  var bufView = new Uint16Array(buf);
+  var buf = new ArrayBuffer(str.length); // 2 bytes for each char
+  var bufView = new Uint8Array(buf);
   for (var i=0, strLen=str.length; i < strLen; i++) {
     bufView[i] = str.charCodeAt(i);
   }
@@ -127,14 +127,35 @@ function ShowLog(message) {
   $("#outputArea").scrollTop($("#outputArea").prop("scrollHeight"));
 }
 
+let heartbeatTimer;
+let heartbeatPeriod=4000
+let heartbeatResponsePeriod=2000
+function sendHeartbeat() {
+  message = str2ab("hb")
+  chrome.sockets.tcp.send(client, message, (info)=>{
+    if (info.resultCode < 0) {
+      ShowLog("Send heartbeat failed!!");  
+    }
+  });
+  heartbeatTimer = setTimeout(heartbeatTimeoutHandler, heartbeatResponsePeriod)
+}
+
+function heartbeatTimeoutHandler() {
+  ShowLog("Heartbeat timeout, server may have close!!");
+  chrome.sockets.tcp.close(client, function(){
+    ShowLog("Client has been closed.");
+  });
+}
+
 chrome.sockets.tcp.onReceive.addListener(function(info) {
+  if (info.resultCode < 0)
+    ShowLog("Recv failed!!!!!!!!");
   if (info.socketId != client)
     return;
   message = String.fromCharCode.apply(null, new Uint8Array(info.data));
-  ShowLog("recv " + message)
   message = JSON.parse(message);
-
   if (message["action"] == "start") {
+    ShowLog("recv " + message)
     transferServerIp = message["data"]["serverIp"]
     transferServerPort = message["data"]["serverPort"]
     multicastIp = message["data"]["multicastIp"]
@@ -145,10 +166,14 @@ chrome.sockets.tcp.onReceive.addListener(function(info) {
     } else {
       ReceiveReliable(transferServerIp, transferServerPort, path);
     }
+  } else if (message["action"] == "heartbeat") {
+    clearTimeout(heartbeatTimer)
+    heartbeatTimer = setTimeout(sendHeartbeat, heartbeatPeriod);
   }
 });
 
 chrome.sockets.tcp.onReceiveError.addListener(function(info) {
+  clearTimeout(heartbeatTimer)
   ShowLog("client " + info.socketId + " disconnect")
   $("#connectButton").show();
 });
@@ -176,8 +201,13 @@ $("#connectButton").on('click', function(){
     chrome.sockets.tcp.connect(client, serverIp, serverPort, 
       function(result){
         ShowLog("Socket " + client + " connection result: "+result);
-        if (result == 0)
-        $("#connectButton").hide();
+        if (result == 0) {
+          $("#connectButton").hide();
+          // heartbeat timer
+          heartbeatTimer = setTimeout(sendHeartbeat, heartbeatPeriod);
+        } else {
+          chrome.sockets.tcp.close(client, (info)=>{});
+        }
       });
   });
   return false;
