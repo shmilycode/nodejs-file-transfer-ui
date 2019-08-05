@@ -131,6 +131,7 @@ let heartbeatTimer;
 let heartbeatPeriod=4000
 let heartbeatResponsePeriod=2000
 function sendHeartbeat() {
+  console.log("Send heartbeat");
   message = str2ab("hb")
   chrome.sockets.tcp.send(client, message, (info)=>{
     if (info.resultCode < 0) {
@@ -152,6 +153,7 @@ chrome.sockets.tcp.onReceive.addListener(function(info) {
     ShowLog("Recv failed!!!!!!!!");
   if (info.socketId != client)
     return;
+  console.log(info)
   message = String.fromCharCode.apply(null, new Uint8Array(info.data));
   message = JSON.parse(message);
   if (message["action"] == "start") {
@@ -167,6 +169,7 @@ chrome.sockets.tcp.onReceive.addListener(function(info) {
       ReceiveReliable(transferServerIp, transferServerPort, path);
     }
   } else if (message["action"] == "heartbeat") {
+    console.log("Clear timeout for receive data");
     clearTimeout(heartbeatTimer)
     heartbeatTimer = setTimeout(sendHeartbeat, heartbeatPeriod);
   }

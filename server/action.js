@@ -4,7 +4,7 @@ const LocalStorage = require('node-localstorage').LocalStorage
 const util = require('util')
 let clientGroup = new Array();
 let heartbeatTimerMap = {}
-let heartbeatTimeout = 6000
+let heartbeatTimeout = 10000
 let logMessage = '';
 let localStorage = new LocalStorage('./setting.cf')
 
@@ -144,6 +144,7 @@ var server = net.createServer(function(socket){
   addClient(socket);
 
   socket.on('data', function(data) {
+    console.log(data);
     clearTimeout(heartbeatTimerMap[socket]);
     message = String.fromCharCode.apply(null, new Uint8Array(data));
     if (data == 'hb' || message == 'hb'){
