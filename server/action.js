@@ -25,7 +25,7 @@ function getTimeStamp(){
 }
 
 Date.prototype.Format = function(fmt)   
-{    
+{
   var o = {
     "M+" : this.getMonth()+1,                 //月份   
     "d+" : this.getDate(),                    //日   
@@ -118,16 +118,16 @@ function CheckInputs() {
 
 function removeClient(client) {
   clientGroup.splice(jQuery.inArray(client, clientGroup), 1)
-  clearTimeout(heartbeatTimerMap[client])
-  delete heartbeatTimerMap[client]
+  clearTimeout(heartbeatTimerMap[client.remoteAddress])
+  delete heartbeatTimerMap[client.remoteAddress]
   FlashClientList()
 }
 
 function addClient(client) {
   clientGroup.push(client)
-  if (client in heartbeatTimerMap)
+  if (client.remoteAddress in heartbeatTimerMap)
     ShowLog("Error client " + client.remoteAddress + " has exist!!!");
-  heartbeatTimerMap[client] = setTimeout(heartbeatTimeoutHandler, heartbeatTimeout, client)
+  heartbeatTimerMap[client.remoteAddress] = setTimeout(heartbeatTimeoutHandler, heartbeatTimeout, client)
   FlashClientList();
 }
 
@@ -145,14 +145,14 @@ var server = net.createServer(function(socket){
 
   socket.on('data', function(data) {
     console.log(data);
-    clearTimeout(heartbeatTimerMap[socket]);
+    clearTimeout(heartbeatTimerMap[socket.remoteAddress]);
     message = String.fromCharCode.apply(null, new Uint8Array(data));
     if (data == 'hb' || message == 'hb'){
       responseHeartbeat(socket);
     } else {
       ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ' said: ' + data);
     }
-    heartbeatTimerMap[socket] = setTimeout(heartbeatTimeoutHandler, heartbeatTimeout, client)
+    heartbeatTimerMap[socket.remoteAddress] = setTimeout(heartbeatTimeoutHandler, heartbeatTimeout, client)
   });
 
   socket.on('error',function(exception){
