@@ -1,8 +1,11 @@
 const FileTransfer = require('./ffi/file_transfer.js')
 const {ipcRenderer} = require('electron');
 const LocalStorage = require('node-localstorage').LocalStorage
-const util = require('util')
 const net = require('net')
+const dgram = require('dgram');
+const iconv = require('iconv-lite')
+let defaultDiscoveryAddress ="239.6.6.6"
+let defaultDiscoveryPort = 41234
 let logMessage = '';
 
 Date.prototype.Format = function(fmt)   
@@ -15,7 +18,7 @@ Date.prototype.Format = function(fmt)
     "s+" : this.getSeconds(),                 //秒   
     "q+" : Math.floor((this.getMonth()+3)/3), //季度   
     "S"  : this.getMilliseconds()             //毫秒   
-  };   
+  };
   if(/(y+)/.test(fmt))   
     fmt=fmt.replace(RegExp.$1, (this.getFullYear()+"").substr(4 - RegExp.$1.length));   
   for(var k in o)   
@@ -55,7 +58,6 @@ class FileTransferView {
       this.multicastPort = storage.getItem('multicastPort')
       this.useTCP = storage.getItem('useTCP') == 'false'?false:true
     }
-
     this.registerStartServer();
     this.registerSendButton();
     this.registerCancelButton();
@@ -110,11 +112,16 @@ class FileTransferView {
       }
       else {
         this.multicastIp = $('#multicastIp').val();
-        this.multicastPort = Number($('multicastPort').val());
+        this.multicastPort = Number($('#multicastPort').val());
       }
       this.fileToSend = $('#inputFile').prop('files')[0].path
-      this.controller.startSend(
-          this.serverIp, this.serverPort, this.multicastIp, this.multicastPort, this.fileToSend);
+      //encode filename to 'gbk', so that chinese string can be recognized.
+      let tmp = iconv.encode(this.fileToSend, 'gbk')
+      if (this.useTCP)
+        this.controller.sendFileByTCP(this.serverIp, this.serverPort, tmp);
+      else
+        this.controller.sendFileByMulticast(
+            this.multicastIp, this.multicastPort, this.serverIp, this.serverPort, tmp);
       this.storeAllSettings();
       return false;
     })
@@ -198,19 +205,35 @@ class FileTransferController {
   }
 
   startServer(ip, port) {
-    this.module.startServer(ip, port);
-    this.view.disableStartServer();
+    try{
+      this.module.startServer(ip, port);
+      this.view.disableStartServer();
+    } catch(err){
+      console.log(err)
+    }
   }
 
-  startSend(ip, port, multicastIp, multicastPort, fileToSend) {
+  sendFileByTCP(serverIp, serverPort, filename) {
     this.view.setSendingStatus(true);
-    this.module.startSend(ip, port, multicastIp, multicastPort, fileToSend);
-    this.module.notifyAllClient(ip, port, multicastIp, multicastPort);
+    this.module.sendFileByTCP(serverIp, serverPort, filename)
+    this.module.notifyAllClient(serverIp, serverPort, null, null);
+  }
+
+  sendFileByMulticast(multicastIp, multicastPort, 
+      serverIp, serverPort, filename) {
+    this.view.setSendingStatus(true);
+    this.module.sendFileByMulticast(multicastIp, multicastPort, 
+      serverIp, serverPort, filename)
+    this.module.notifyAllClient(serverIp, serverPort, multicastIp, multicastPort);
   }
 
   cancelSend() {
-    this.view.setSendingStatus(false)
-    this.module.cancelSend();
+    try{
+      this.view.setSendingStatus(false)
+      this.module.cancelSend();
+    } catch(err){ 
+      console.log(err)
+    }
   }
 }
 
@@ -221,11 +244,14 @@ class FileTransferModel {
     this.heartbeatTimerMap = {}
     this.heartbeatTimeout = 10000
     this.observers = new Array();
+    this.serverIp = null;
     this.server = null;
+    this.discoveryServer = null;
+    this.discoveryTimer = null;
   }
 
   sendFileByTCP(serverIp, serverPort, filename) {
-    ShowLog("SendFileByTCP "+serverIp + ' ' + serverPort + ' ' + filename);
+    ShowLog("SendFileByTCP "+serverIp + ' ' + serverPort + ' ' + iconv.decode(filename, 'gbk'));
     this.fileTransfer.createReliableChannel(serverIp, serverPort);
     try {
       this.fileTransfer.sendFile(filename)
@@ -235,6 +261,19 @@ class FileTransferModel {
       ShowLog(e);
     }
   };
+
+  sendFileByMulticast(multicastIp, multicastPort, 
+      serverIp, serverPort, filename) {
+    ShowLog("SendFileByMulticast "+multicastIp + ' ' + multicastPort + ' ' + iconv.decode(filename, 'gbk'));
+    this.fileTransfer.createUnreliableChannel(multicastIp, multicastPort, serverIp, serverPort);
+    try {
+      this.fileTransfer.sendFile(filename)
+        .then(()=>{ShowLog("Send finish");})
+        .catch((status)=>{ShowLog("Send failed " + status);});
+    }catch(e){
+      ShowLog(e);
+    }
+  }
 
   responseHeartbeat(client) {
     let notifyMessage = {"action": "heartbeat"};
@@ -281,6 +320,7 @@ class FileTransferModel {
 
   startServer(ip, port) {
     //server
+    this.serverIp = ip
     this.server = net.createServer((socket)=>{
       ShowLog('connect: ' + socket.remoteAddress + ' : ' + socket.remotePort);
       this.addClient(socket);
@@ -322,11 +362,31 @@ class FileTransferModel {
     this.server.on("error",(exception)=>{
       ShowLog("server error:" + exception);
     });
+
+    this.startDiscoveryServer(defaultDiscoveryAddress, defaultDiscoveryPort);
   }
 
-  startSend(ip, port, multicastIp, multicastPort, fileToSend) {
-    this.sendFileByTCP(ip, port, fileToSend);
-    console.log("on click: "+ip+': '+port+multicastIp+multicastPort)
+  startDiscoveryServer(ip, port) {
+    this.discoveryServer = dgram.createSocket('udp4')
+    this.discoveryServer.bind('0',this.serverIp, ()=>{
+      this.discoveryTimer = setInterval(()=>{
+        this.sendDiscoveryMessage(ip, port);
+      }, 2000)
+    });
+  }
+
+  sendDiscoveryMessage(destIp, destPort) {
+    let discoveryMessage = {"action": "discovery", "data": {"serverIp": this.serverIp }}
+    discoveryMessage = JSON.stringify(discoveryMessage)
+    discoveryMessage = Buffer.from(discoveryMessage);
+    console.log("Send "+ discoveryMessage)
+    this.discoveryServer.send(discoveryMessage, destPort, destIp, (err)=>{
+      if(err) {
+        ShowLog("Send discovery message failed, " + err)
+        this.discoveryServer.close();
+        clearInterval(this.discoveryTimer)
+      }
+    });
   }
 
   cancelSend() {

@@ -10,7 +10,7 @@
       <div class="form-row">
         <div class="form-row form-group col-md-4">
           <label>server ip: </label>
-          <input type="text" class="form-control" id="serverIp" value="192.168.1.189">
+          <input type="text" class="form-control" id="serverIp">
           <div class="invalid-feedback">
             服务端地址不能为空
           </div>
@@ -29,6 +29,11 @@
         <div class="invalid-feedback">
           存储路径不能为空
         </div>
+      </div>
+
+      <div class="form-group form-check">
+        <input type="checkbox" class="form-check-input" id="automaticGetServerIp">
+        <label class="form-check-label">自动获取服务地址</label>
       </div>
 
       <div class="form-group">

@@ -1,104 +1,4 @@
-function startStreamOutput(e) 
-{
-  receiveFile();
-}
-
-function closeStreamOutput() {
-  sendFile();
-}
-
-function ReceiveUnreliable(serverIp, serverPort, multicastIp, multicastPort, path) {
-  ShowLog("Start multicast receive.");
-  if (globalChannelId != -1) {
-    ShowLog("Error, globalChannelId != -1");
-    return;
-  }
-  chrome.seewoos.fileTransfer.createFileTransferChannel(multicastIp, multicastPort, serverIp, serverPort, function(channelId){
-   if(channelId != -1) {
-      globalChannelId = channelId;
-      ShowLog("Open channel success!!");
-      chrome.seewoos.fileTransfer.receiveFile(channelId, path, function(status){
-        if (status != 0) {
-            ShowLog("Receive file failed, error code: "+status);
-        } else {
-            ShowLog("Receive file success!!");
-        }
-        chrome.seewoos.fileTransfer.closeFileTransferChannel(channelId, function(status){
-            ShowLog("Close channel: "+status);
-        });
-      });
-   } else {
-     ShowLog("Open channel failed!!");
-   }
-  })
-};
-
-function str2ab(str) {
-  var buf = new ArrayBuffer(str.length); // 2 bytes for each char
-  var bufView = new Uint8Array(buf);
-  for (var i=0, strLen=str.length; i < strLen; i++) {
-    bufView[i] = str.charCodeAt(i);
-  }
-  return buf;
-}
-
-function ReceiveReliable(serverIp, serverPort, path) {
-  ShowLog("Start tcp receive.");
-  if (globalChannelId != -1) {
-    ShowLog("Error, globalChannelId != -1");
-    return;
-  }
-  chrome.seewoos.fileTransfer.createReliableFileTransferChannel(serverIp, serverPort, function(channelId){
-   if(channelId != -1) {
-      globalChannelId = channelId;
-      ShowLog("Open channel success!!");
-      chrome.seewoos.fileTransfer.receiveFile(channelId, path, function(status){
-        if (status != 0) {
-            ShowLog("Receive file failed, error code: "+status);
-        } else {
-            ShowLog("Receive file success!!");
-            chrome.sockets.tcp.send(client, str2ab("I'm OK!"), (info)=>{
-              ShowLog("Notify server result " + info.resultCode);
-            });
-        }
-        closeChannel();
-      });
-   } else {
-     ShowLog("Open channel failed!!");
-   }
-  })
-};
-
-function closeChannel() {
-  if (globalChannelId == -1)
-    return;
-  chrome.seewoos.fileTransfer.closeFileTransferChannel(globalChannelId, function(status){
-      ShowLog("CloseChannel status =  " + status);
-      globalChannelId = -1;
-  });
-};
-
-function afterCloseWindow() {
-  closeChannel();
-  chrome.sockets.tcp.close(client, function(){
-    ShowLog("Client has been closed.");
-  });
-}
-
-function CheckInputs() {
-  elem = ['#serverIp', '#pathToSave'];
-  for (i = 0; i < elem.length; i++) {
-    if (!$(elem[i]).val()) {
-      $(elem[i]).addClass('is-invalid')
-      return false;
-    }
-    else {
-      $(elem[i]).removeClass('is-invalid')
-    }
-  }
-  return true;
-}
-
+let logMessage = '';
 Date.prototype.Format = function(fmt)   
 {    
   var o = {   
@@ -118,7 +18,6 @@ Date.prototype.Format = function(fmt)
   return '[' + fmt + '] ';   
 } 
 
-let logMessage = '';
 function ShowLog(message) {
   message = new Date().Format("hh:mm:ss.S") + message;
   logMessage = logMessage + message + '\n';
@@ -127,102 +26,162 @@ function ShowLog(message) {
   $("#outputArea").scrollTop($("#outputArea").prop("scrollHeight"));
 }
 
-let heartbeatTimer;
-let heartbeatPeriod=4000
-let heartbeatResponsePeriod=2000
-function sendHeartbeat() {
-  console.log("Send heartbeat");
-  message = str2ab("hb")
-  chrome.sockets.tcp.send(client, message, (info)=>{
-    if (info.resultCode < 0) {
-      ShowLog("Send heartbeat failed!!");  
-    }
-  });
-  heartbeatTimer = setTimeout(heartbeatTimeoutHandler, heartbeatResponsePeriod)
-}
 
-function heartbeatTimeoutHandler() {
-  ShowLog("Heartbeat timeout, server may have close!!");
-  chrome.sockets.tcp.close(client, function(){
-    ShowLog("Client has been closed.");
-  });
-}
-
-chrome.sockets.tcp.onReceive.addListener(function(info) {
-  if (info.resultCode < 0)
-    ShowLog("Recv failed!!!!!!!!");
-  if (info.socketId != client)
-    return;
-  console.log(info)
-  message = String.fromCharCode.apply(null, new Uint8Array(info.data));
-  message = JSON.parse(message);
-  if (message["action"] == "start") {
-    ShowLog("recv " + message)
-    transferServerIp = message["data"]["serverIp"]
-    transferServerPort = message["data"]["serverPort"]
-    multicastIp = message["data"]["multicastIp"]
-    multicastPort = message["data"]["multicastPort"]
-    path = $("#pathToSave").val()
-    if (multicastIp) {
-      ReceiveUnreliable(transferServerIp, transferServerPort, multicastIp, multicastPort, path);
-    } else {
-      ReceiveReliable(transferServerIp, transferServerPort, path);
+class FileTransferClientView {
+  constructor(settings, controller) {
+    this.serverIp = settings.serverIp
+    this.pathToSave = settings.pathToSave
+    this.controller = controller
+    this.automaticGetServerIp = settings.automaticGetServerIp
+    this.registerChooseFolderButton()
+    this.registerConnectButton()
+    this.registerCancelButton()
+    this.registerAutoServerIpCheckbox()
+    $('#serverIp').val(this.serverIp)
+    $('#pathToSave').val(this.pathToSave)
+    this.controller.setPathToSave(this.pathToSave)
+    if (this.automaticGetServerIp) {
+      $('#automaticGetServerIp').attr('checked', 'checked')
     }
-  } else if (message["action"] == "heartbeat") {
-    console.log("Clear timeout for receive data");
-    clearTimeout(heartbeatTimer)
-    heartbeatTimer = setTimeout(sendHeartbeat, heartbeatPeriod);
+    $('#automaticGetServerIp').change()
   }
-});
 
-chrome.sockets.tcp.onReceiveError.addListener(function(info) {
-  clearTimeout(heartbeatTimer)
-  ShowLog("client " + info.socketId + " disconnect")
-  $("#connectButton").show();
-});
+  CheckInputs() {
+    let elem = ['#serverIp', '#pathToSave'];
+    for (let i = 0; i < elem.length; i++) {
+      if (!$(elem[i]).val()) {
+        $(elem[i]).addClass('is-invalid')
+        return false;
+      }
+      else {
+        $(elem[i]).removeClass('is-invalid')
+      }
+    }
+    return true;
+  }
 
-$("#chooseFolderButton").on("click", function() {
-  chrome.fileSystem.chooseEntry({type: "openDirectory"}, function(entry){
-    chrome.fileSystem.getDisplayPath(entry, function(path) {
-      ShowLog("Save to path "+path);
-      $("#pathToSave").val(path);
-      CheckInputs();
-    });
-  });
-});
+  onShowLog(message) {
+    ShowLog(message)
+  }
 
-$("#connectButton").on('click', function(){
-  if (!CheckInputs())
-    return false;
-  serverIp = $('#serverIp').val();
-  pathToSave = $("#pathToSave").val()
-  serverPort = 6669;
+  onConnectionCreated() {
+    $("#connectButton").hide();
+    $('#serverIp').attr('disabled', 'disabled')
+    $('#pathToSave').attr('disabled', 'disabled')
+    $('#chooseFolderButton').attr('disabled', 'disabled')
+    $('#automaticGetServerIp').attr('disabled', 'disabled')
+  }
 
-  ShowLog("Try connecting to " +serverIp + ":" + serverPort); 
-  chrome.storage.local.set({serverIp: serverIp, pathToSave: pathToSave}, ()=>{})
-  chrome.sockets.tcp.create({}, function(createInfo){
-    client = createInfo.socketId;
-    chrome.sockets.tcp.connect(client, serverIp, serverPort, 
-      function(result){
-        ShowLog("Socket " + client + " connection result: "+result);
-        if (result == 0) {
-          $("#connectButton").hide();
-          // heartbeat timer
-          heartbeatTimer = setTimeout(sendHeartbeat, heartbeatPeriod);
-        } else {
-          chrome.sockets.tcp.close(client, (info)=>{});
-        }
+  onConnectionReceiveError() {
+    $("#connectButton").show();
+    $('#serverIp').removeAttr('disabled')
+    $('#pathToSave').removeAttr('disabled')
+    $('#chooseFolderButton').removeAttr('disabled')
+    $('#automaticGetServerIp').removeAttr('disabled')
+  }
+
+  onServerFound(serverIp) {
+    if (this.automaticGetServerIp && $('#connectButton').is(':visible')) {
+      if (this.serverIp == serverIp &&
+          $('#serverIp').val() == serverIp)
+        return;
+      this.serverIp = serverIp;
+      $('#serverIp').val(serverIp)
+    }
+  }
+
+  registerChooseFolderButton() {
+    $("#chooseFolderButton").on("click", ()=>{
+      chrome.fileSystem.chooseEntry({type: "openDirectory"}, (entry)=>{
+        chrome.fileSystem.getDisplayPath(entry, (path)=>{
+          ShowLog("Save to path "+path);
+          $("#pathToSave").val(path);
+          this.controller.setPathToSave(path)
+          this.CheckInputs();
+        });
       });
-  });
-  return false;
-}); 
- 
-$("#cancelButton").on('click', function() {
-  closeChannel();
-  return false;
-});
+    });
+  }
 
-chrome.storage.local.get(['serverIp', 'pathToSave'], (result)=>{
-  $('#serverIp').val(result.serverIp)
-  $('#pathToSave').val(result.pathToSave)
-});
+  registerConnectButton() {
+    $("#connectButton").on('click', ()=>{
+      if (!this.CheckInputs())
+        return false;
+      this.serverIp = $('#serverIp').val();
+      this.pathToSave = $("#pathToSave").val()
+      this.serverPort = 6669;
+      ShowLog("Try connecting to " +this.serverIp + ":" + this.serverPort); 
+      chrome.storage.local.set({
+        serverIp: this.serverIp, 
+        pathToSave: this.pathToSave, 
+        automaticGetServerIp: this.automaticGetServerIp}, ()=>{})
+      this.controller.createConnection(this.serverIp, this.serverPort);
+      return false;
+    }); 
+  }
+
+  registerCancelButton() {
+    $("#cancelButton").on('click', ()=>{
+      this.controller.closeChannel();
+      return false;
+    });
+  }
+
+  registerAutoServerIpCheckbox() {
+    $('#automaticGetServerIp').change(()=>{
+      this.automaticGetServerIp = $('#automaticGetServerIp').prop("checked")
+      return false;
+    })
+  }
+
+}
+
+class FileTransferClientController {
+  constructor(model) {
+    this.model =model 
+  }
+
+  async init() {
+    try{
+      this.fileTransferClientView = await this.initializeClientView();
+      this.model.registerObserver(this.fileTransferClientView)
+    }catch(err) {
+      ShowLog(err)
+    }
+  }
+
+  initializeClientView() {
+    let pm = new Promise((resolve, reject)=>{
+      chrome.storage.local.get(['serverIp', 'pathToSave', 'automaticGetServerIp'], 
+      (result)=>{
+        let fileTransferClientView = 
+          new FileTransferClientView(result, this)
+        resolve(fileTransferClientView)
+      });
+    })
+    return pm
+  }
+
+  createConnection(serverIp, serverPort) {
+    try{
+      this.model.createConnection(serverIp, serverPort)
+    } catch(err){
+      ShowLog(err)
+    }
+
+  }
+  closeChannel() {
+    try{
+      this.model.closeChannel();
+    } catch(err) {
+      ShowLog(err)
+    }
+  }
+
+  setPathToSave(path) {
+    this.model.setPathToSave(path)
+  }
+}
+
+let controller = new FileTransferClientController(globalModel)
+controller.init()

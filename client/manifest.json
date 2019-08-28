@@ -3,7 +3,8 @@
     "background": {
       "persistent": false,
       "scripts": [
-       "background.js"
+       "background.js",
+       "js/jquery.min.js"
       ]
     }
   },
@@ -25,6 +26,10 @@
     "tcp": {
       "connect": "*",
       "send": "*"
+    },
+    "udp":{
+      "bind":"*",
+      "multicastMembership":""
     }
   },
 
