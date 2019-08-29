@@ -242,7 +242,7 @@ class FileTransferModel {
     this.fileTransfer = new FileTransfer();
     this.clientGroup = new Array();
     this.heartbeatTimerMap = {}
-    this.heartbeatTimeout = 10000
+    this.heartbeatTimeout = 30000
     this.observers = new Array();
     this.serverIp = null;
     this.server = null;

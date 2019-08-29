@@ -33,6 +33,8 @@ class FileTransferClientView {
     this.pathToSave = settings.pathToSave
     this.controller = controller
     this.automaticGetServerIp = settings.automaticGetServerIp
+    if (this.automaticGetServerIp == null)
+      this.automaticGetServerIp = true
     this.registerChooseFolderButton()
     this.registerConnectButton()
     this.registerCancelButton()

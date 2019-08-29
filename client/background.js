@@ -30,7 +30,7 @@ class FileTransferClientModel{
     this.channelId = -1;
     this.heartbeatTimer = null;
     this.heartbeatPeriod=4000
-    this.heartbeatResponsePeriod=2000
+    this.heartbeatResponsePeriod=30000
     this.observers = new Array();
     this.connection = null;
     this.pathToSave = null;
