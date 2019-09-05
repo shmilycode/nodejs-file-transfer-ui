@@ -136,6 +136,16 @@ class FileTransferClientView {
     })
   }
 
+  onReceiveStart() {
+    $("#cancelButton").removeClass('btn-warning')
+    $("#cancelButton").addClass('btn-success')
+  }
+
+  onReceiveFinish() {
+    $("#cancelButton").removeClass('btn-success')
+    $("#cancelButton").addClass('btn-warning')
+  }
+
 }
 
 class FileTransferClientController {

@@ -28,9 +28,7 @@ chrome.runtime.onSuspend.addListener(function() {
 class FileTransferClientModel{
   constructor(){
     this.channelId = -1;
-    this.heartbeatTimer = null;
-    this.heartbeatPeriod=4000
-    this.heartbeatResponsePeriod=30000
+    this.heartbeatPeriod=30
     this.observers = new Array();
     this.connection = null;
     this.pathToSave = null;
@@ -55,9 +53,9 @@ class FileTransferClientModel{
         (result)=>{
           this.ShowLog("Socket " + this.connection + " connection result: "+result);
           if (result == 0) {
-            // heartbeat timer
-            this.heartbeatTimer = setTimeout(()=>{this.sendHeartbeat()}, this.heartbeatPeriod);
-            this.observers.forEach((item, index, array)=>{item.onConnectionCreated()})
+            chrome.sockets.tcp.setKeepAlive(this.connection, true, this.heartbeatPeriod, (result)=>{
+              this.observers.forEach((item, index, array)=>{item.onConnectionCreated()})
+            });
           } else {
             chrome.sockets.tcp.close(this.connection, (info)=>{});
           }
@@ -66,7 +64,10 @@ class FileTransferClientModel{
   }
 
   closeConnection() {
-    chrome.sockets.tcp.close(this.connection, ()=>{});
+    if (this.connection != null)
+      chrome.sockets.tcp.close(this.connection);
+    if (this.discoveryClient != null)
+      chrome.sockets.udp.close(this.discoveryClient);
   }
 
   ReceiveUnreliable(serverIp, serverPort, multicastIp, multicastPort, path) {
@@ -79,6 +80,7 @@ class FileTransferClientModel{
      if(channelId != -1) {
         this.channelId = channelId;
         this.ShowLog("Open channel success!!");
+        this.observers.forEach((item, index, array)=>{item.onReceiveStart()})
         chrome.seewoos.fileTransfer.receiveFile(channelId, path, (status)=>{
           if (status != 0) {
               this.ShowLog("Receive file failed, error code: "+status);
@@ -89,6 +91,7 @@ class FileTransferClientModel{
               });
           }
           this.closeChannel();
+          this.observers.forEach((item, index, array)=>{item.onReceiveFinish()})
         });
      } else {
        this.ShowLog("Open channel failed!!");
@@ -141,24 +144,6 @@ class FileTransferClientModel{
     });
   };
 
-  sendHeartbeat() {
-    console.log("Send heartbeat");
-    let message = this.str2ab("hb")
-    chrome.sockets.tcp.send(this.connection, message, (info)=>{
-      if (info.resultCode < 0) {
-        this.ShowLog("Send heartbeat failed!!");  
-      }
-    });
-    this.heartbeatTimer = setTimeout(()=>{this.heartbeatTimeoutHandler()}, this.heartbeatResponsePeriod)
-  }
-
-  heartbeatTimeoutHandler() {
-    this.ShowLog("Heartbeat timeout, server may have close!!");
-    chrome.sockets.tcp.close(this.connection, ()=>{
-      this.ShowLog("Client has been closed.");
-    });
-  }
-
   connectionRegister(){
     chrome.sockets.tcp.onReceive.addListener((info)=>{
       if (info.resultCode < 0)
@@ -170,13 +155,10 @@ class FileTransferClientModel{
       message = JSON.parse(message);
       if (message["action"] == "start") {
         this.handleActionStart(message, this.pathToSave);
-      } else if (message["action"] == "heartbeat") {
-        this.handleHeartBeat();
-      }
+      }    
     });
 
     chrome.sockets.tcp.onReceiveError.addListener((info)=>{
-      clearTimeout(this.heartbeatTimer)
       this.ShowLog("client " + info.socketId + " disconnect")
       this.observers.forEach((item, index, array)=>{
         item.onConnectionReceiveError();
@@ -195,12 +177,6 @@ class FileTransferClientModel{
     } else {
       this.ReceiveReliable(transferServerIp, transferServerPort, pathToSave);
     }
-  }
-
-  handleHeartBeat() {
-    console.log("Clear timeout for receive data");
-    clearTimeout(this.heartbeatTimer)
-    this.heartbeatTimer = setTimeout(()=>{this.sendHeartbeat()}, this.heartbeatPeriod);
   }
 
   registerObserver(observer) {

@@ -241,8 +241,7 @@ class FileTransferModel {
   constructor() {
     this.fileTransfer = new FileTransfer();
     this.clientGroup = new Array();
-    this.heartbeatTimerMap = {}
-    this.heartbeatTimeout = 30000
+    this.heartbeatTimeout = 30000;
     this.observers = new Array();
     this.serverIp = null;
     this.server = null;
@@ -275,12 +274,6 @@ class FileTransferModel {
     }
   }
 
-  responseHeartbeat(client) {
-    let notifyMessage = {"action": "heartbeat"};
-    client.setEncoding('utf8');
-    client.write(JSON.stringify(notifyMessage));
-  }
-
   notifyAllClient(serverIp, serverPort, multicastIp, multicastPort) {
     let notifyMessage = {"action": "start", "data": {"serverIp": serverIp, "serverPort": serverPort, 
                     "multicastIp": multicastIp, "multicastPort": multicastPort}};
@@ -294,8 +287,6 @@ class FileTransferModel {
 
   removeClient(client) {
     this.clientGroup.splice(jQuery.inArray(client, this.clientGroup), 1)
-    clearTimeout(this.heartbeatTimerMap[client.remoteAddress])
-    delete this.heartbeatTimerMap[client.remoteAddress]
     this.observers.forEach((item, index, array)=>{
       item.onClientUpdate(this.clientGroup)
     })
@@ -303,19 +294,9 @@ class FileTransferModel {
 
   addClient(client) {
     this.clientGroup.push(client)
-    if (client.remoteAddress in this.heartbeatTimerMap)
-      ShowLog("Error client " + client.remoteAddress + " has exist!!!");
-    this.heartbeatTimerMap[client.remoteAddress] = 
-        setTimeout(()=>{this.heartbeatTimeoutHandler(client)}, this.heartbeatTimeout)
     this.observers.forEach((item, index, array)=>{
       item.onClientUpdate(this.clientGroup)
     })
-  }
-
-  heartbeatTimeoutHandler(client) {
-    ShowLog("socket " + client.remoteAddress + " timeout and closed!")
-    client.end("test");
-    this.removeClient(client)
   }
 
   startServer(ip, port) {
@@ -323,19 +304,14 @@ class FileTransferModel {
     this.serverIp = ip
     this.server = net.createServer((socket)=>{
       ShowLog('connect: ' + socket.remoteAddress + ' : ' + socket.remotePort);
+      socket.setKeepAlive(true, this.heartbeatTimeout)
+      socket.setNoDelay(true)
       this.addClient(socket);
 
       socket.on('data', (data)=>{
         console.log(data);
-        clearTimeout(this.heartbeatTimerMap[socket.remoteAddress]);
         let message = String.fromCharCode.apply(null, new Uint8Array(data));
-        if (data == 'hb' || message == 'hb'){
-          this.responseHeartbeat(socket);
-        } else {
-          ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ' said: ' + data);
-        }
-        this.heartbeatTimerMap[socket.remoteAddress] = 
-          setTimeout(()=>{this.heartbeatTimeoutHandler(socket)}, this.heartbeatTimeout)
+        ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ' said: ' + data);
       });
 
       socket.on('error',(exception)=>{

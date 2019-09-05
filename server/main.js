@@ -2,7 +2,7 @@ const {app, BrowserWindow, ipcMain} = require('electron');
 let win;
 let windowConfig = {
     width:800,
-    height:600
+    height:700
 };
 function createWindow(){
     win = new BrowserWindow(windowConfig);
