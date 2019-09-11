@@ -241,7 +241,6 @@ class FileTransferModel {
   constructor() {
     this.fileTransfer = new FileTransfer();
     this.clientGroup = new Array();
-    this.heartbeatTimeout = 30000;
     this.observers = new Array();
     this.serverIp = null;
     this.server = null;
@@ -304,7 +303,6 @@ class FileTransferModel {
     this.serverIp = ip
     this.server = net.createServer((socket)=>{
       ShowLog('connect: ' + socket.remoteAddress + ' : ' + socket.remotePort);
-      socket.setKeepAlive(true, this.heartbeatTimeout)
       socket.setNoDelay(true)
       this.addClient(socket);
 
