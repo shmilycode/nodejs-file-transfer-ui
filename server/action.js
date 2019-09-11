@@ -216,7 +216,7 @@ class FileTransferController {
   sendFileByTCP(serverIp, serverPort, filename) {
     this.view.setSendingStatus(true);
     this.module.sendFileByTCP(serverIp, serverPort, filename)
-    this.module.notifyAllClient(serverIp, serverPort, null, null);
+    this.module.notifyAllClient(serverIp, serverPort, null, null, "start");
   }
 
   sendFileByMulticast(multicastIp, multicastPort, 
@@ -224,12 +224,13 @@ class FileTransferController {
     this.view.setSendingStatus(true);
     this.module.sendFileByMulticast(multicastIp, multicastPort, 
       serverIp, serverPort, filename)
-    this.module.notifyAllClient(serverIp, serverPort, multicastIp, multicastPort);
+    this.module.notifyAllClient(serverIp, serverPort, multicastIp, multicastPort, "start");
   }
 
   cancelSend() {
     try{
       this.view.setSendingStatus(false)
+      this.module.notifyAllClient(null, null, null, null, "stop");
       this.module.cancelSend();
     } catch(err){ 
       console.log(err)
@@ -242,6 +243,7 @@ class FileTransferModel {
     this.fileTransfer = new FileTransfer();
     this.clientGroup = new Array();
     this.observers = new Array();
+    this.transferFinishList = new Array();
     this.serverIp = null;
     this.server = null;
     this.discoveryServer = null;
@@ -250,10 +252,14 @@ class FileTransferModel {
 
   sendFileByTCP(serverIp, serverPort, filename) {
     ShowLog("SendFileByTCP "+serverIp + ' ' + serverPort + ' ' + iconv.decode(filename, 'gbk'));
+    this.transferFinishList = new Array();
     this.fileTransfer.createReliableChannel(serverIp, serverPort);
     try {
       this.fileTransfer.sendFile(filename)
-        .then(()=>{ShowLog("Send finish");})
+        .then(()=>{setTimeout(()=>{
+          ShowLog("Send finish");
+          this.showTransferFinishResult();
+        }, 3000)})
         .catch((status)=>{ShowLog("Send failed " + status);});
     }catch(e){
       ShowLog(e);
@@ -263,18 +269,21 @@ class FileTransferModel {
   sendFileByMulticast(multicastIp, multicastPort, 
       serverIp, serverPort, filename) {
     ShowLog("SendFileByMulticast "+multicastIp + ' ' + multicastPort + ' ' + iconv.decode(filename, 'gbk'));
+    this.transferFinishList = new Array();
     this.fileTransfer.createUnreliableChannel(multicastIp, multicastPort, serverIp, serverPort);
     try {
       this.fileTransfer.sendFile(filename)
-        .then(()=>{ShowLog("Send finish");})
-        .catch((status)=>{ShowLog("Send failed " + status);});
+        .then(()=>{
+          ShowLog("Send finish");
+          this.showTransferFinishResult();
+        }).catch((status)=>{ShowLog("Send failed " + status);});
     }catch(e){
       ShowLog(e);
     }
   }
 
-  notifyAllClient(serverIp, serverPort, multicastIp, multicastPort) {
-    let notifyMessage = {"action": "start", "data": {"serverIp": serverIp, "serverPort": serverPort, 
+  notifyAllClient(serverIp, serverPort, multicastIp, multicastPort, action) {
+    let notifyMessage = {"action": action, "data": {"serverIp": serverIp, "serverPort": serverPort, 
                     "multicastIp": multicastIp, "multicastPort": multicastPort}};
     ShowLog("Send "+JSON.stringify(notifyMessage))
     for(let idx = 0; idx < this.clientGroup.length; idx++) {
@@ -298,6 +307,14 @@ class FileTransferModel {
     })
   }
 
+  showTransferFinishResult() {
+    let sum = this.transferFinishList.length
+    let min = Math.min.apply(null, this.transferFinishList)/1000
+    let max = Math.max.apply(null, this.transferFinishList)/1000
+    let ave = this.transferFinishList.reduce((a,b)=>a+b)/sum/1000
+    ShowLog(sum + " finished. Min=" + min+"s. Max=" + max + "s."+" Ave="+ave+"s.")
+  }
+
   startServer(ip, port) {
     //server
     this.serverIp = ip
@@ -307,9 +324,10 @@ class FileTransferModel {
       this.addClient(socket);
 
       socket.on('data', (data)=>{
-        console.log(data);
-        let message = String.fromCharCode.apply(null, new Uint8Array(data));
-        ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ' said: ' + data);
+        let message = JSON.parse(data)
+        if (message["action"] == "finish")
+          this.transferFinishList.push(message["data"]["duration"]);
+        ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ': ' + data);
       });
 
       socket.on('error',(exception)=>{
@@ -345,12 +363,12 @@ class FileTransferModel {
     this.discoveryServer.bind('0',this.serverIp, ()=>{
       this.discoveryTimer = setInterval(()=>{
         this.sendDiscoveryMessage(ip, port);
-      }, 2000)
+      }, 3000)
     });
   }
 
   sendDiscoveryMessage(destIp, destPort) {
-    let discoveryMessage = {"action": "discovery", "data": {"serverIp": this.serverIp }}
+    let discoveryMessage = {"action": "discovery", "data": {"serverIp": this.serverIp, "savePath": "~/Downloads"}}
     discoveryMessage = JSON.stringify(discoveryMessage)
     discoveryMessage = Buffer.from(discoveryMessage);
     console.log("Send "+ discoveryMessage)

@@ -70,12 +70,23 @@ class FileTransferClientModel{
       chrome.sockets.udp.close(this.discoveryClient);
   }
 
+  transferTrace() {
+    this.ShowLog("Transfer trace start")
+    this.transferStartTime = new Date().getTime()
+  }
+
+  getTransferDuration() {
+    let transferEndTime = new Date().getTime()
+    return transferEndTime - this.transferStartTime
+  }
+
   ReceiveUnreliable(serverIp, serverPort, multicastIp, multicastPort, path) {
     this.ShowLog("Start multicast receive.");
     if (this.channelId != -1) {
       this.ShowLog("Error, channel != -1");
       return;
     }
+    this.transferTrace();
     chrome.seewoos.fileTransfer.createFileTransferChannel(multicastIp, multicastPort, serverIp, serverPort, (channelId)=>{
      if(channelId != -1) {
         this.channelId = channelId;
@@ -85,8 +96,9 @@ class FileTransferClientModel{
           if (status != 0) {
               this.ShowLog("Receive file failed, error code: "+status);
           } else {
-              this.ShowLog("Receive file success!!");
-              chrome.sockets.tcp.send(this.connection, this.str2ab("I'm OK!"), (info)=>{
+              let result = {"action": "finish", "data":{"duration": this.getTransferDuration()}}
+              this.ShowLog(JSON.stringify(result));
+              chrome.sockets.tcp.send(this.connection, this.str2ab(JSON.stringify(result)), (info)=>{
                 this.ShowLog("Notify server result " + info.resultCode);
               });
           }
@@ -105,6 +117,7 @@ class FileTransferClientModel{
       this.ShowLog("Error, channelId != -1");
       return;
     }
+    this.transferTrace();
     chrome.seewoos.fileTransfer.createReliableFileTransferChannel(serverIp, serverPort, (channelId)=>{
      if(channelId != -1) {
         this.channelId = channelId;
@@ -113,8 +126,9 @@ class FileTransferClientModel{
           if (status != 0) {
               this.ShowLog("Receive file failed, error code: "+status);
           } else {
-              this.ShowLog("Receive file success!!");
-              chrome.sockets.tcp.send(this.connection, this.str2ab("I'm OK!"), (info)=>{
+              let result = {"action": "finish", "data":{"duration": this.getTransferDuration()}}
+              this.ShowLog(JSON.stringify(result));
+              chrome.sockets.tcp.send(this.connection, this.str2ab(JSON.stringify(result)), (info)=>{
                 this.ShowLog("Notify server result " + info.resultCode);
               });
           }
@@ -155,7 +169,10 @@ class FileTransferClientModel{
       message = JSON.parse(message);
       if (message["action"] == "start") {
         this.handleActionStart(message, this.pathToSave);
-      }    
+      } else if (message["action"] == "stop") {
+        this.closeChannel();
+        this.observers.forEach((item, index, array)=>{item.onReceiveFinish()})
+      }
     });
 
     chrome.sockets.tcp.onReceiveError.addListener((info)=>{
@@ -221,8 +238,8 @@ class FileTransferClientModel{
     message = JSON.parse(message);
     if (message["action"] == "discovery") {
       let serverIp = message["data"]["serverIp"]
-
-      this.observers.forEach((item, index, array)=>{item.onServerFound(serverIp)})
+      let savePath = message["data"]["savePath"]
+      this.observers.forEach((item, index, array)=>{item.onServerFound(serverIp, savePath)})
     } else {
       console.log("discovery client receive unknown message!")
     }

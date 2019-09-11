@@ -82,13 +82,19 @@ class FileTransferClientView {
     $('#automaticGetServerIp').removeAttr('disabled')
   }
 
-  onServerFound(serverIp) {
+  onServerFound(serverIp, savePath) {
     if (this.automaticGetServerIp && $('#connectButton').is(':visible')) {
-      if (this.serverIp == serverIp &&
-          $('#serverIp').val() == serverIp)
-        return;
-      this.serverIp = serverIp;
-      $('#serverIp').val(serverIp)
+      ShowLog("Discovery "+serverIp + ", save to "+savePath);
+      if (this.serverIp != serverIp || $('#serverIp').val() != serverIp) {
+        this.serverIp = serverIp
+        $('#serverIp').val(serverIp)
+      }
+      if (this.pathToSave != savePath || $('pathToSave').val() != savePath) {
+        this.pathToSave = savePath
+        this.controller.setPathToSave(savePath)
+        $('#pathToSave').val(savePath)
+      }
+      $("#connectButton").click()
     }
   }
 
