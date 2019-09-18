@@ -151,9 +151,56 @@ class FileTransferView {
     clientList.empty()
     for(let idx = 0; idx < clientGroup.length; idx++) {
       let client = clientGroup[idx]
-      clientList.append("<li class='list-group-item'>"+client.remoteAddress + ':' + client.remotePort+'</li>');
+      clientList.append("<li class='list-group-item d-flex justify-content-between align-items-center'>"+
+        client.remoteAddress + ':' + client.remotePort +
+        "<span class='badge badge-pill badge-success' id=client_" + idx + ">" + idx + "</span>" +
+        '</li>');
     }
     $("#clientCount").html(clientGroup.length);
+  }
+
+  onNotifyAllClient(action, clientGroup) {
+    if (action == "start") {
+      for(let idx = 0; idx < clientGroup.length; idx++) {
+        let client_node = "#client_" + idx
+        if ($(client_node).hasClass("badge-success")) {
+          $(client_node).removeClass("badge-success")
+          $(client_node).addClass("badge-danger")
+        }
+      }
+    } else if(action == "stop") {
+      for(let idx = 0; idx < clientGroup.length; idx++) {
+        let client_node = "#client_" + idx
+        if ($(client_node).hasClass("badge-success") || 
+            $(client_node).hasClass("badge-warning")) {
+          $(client_node).removeClass("badge-success")
+          $(client_node).removeClass("badge-warning")
+          $(client_node).addClass("badge-danger")
+        }
+      }
+    }
+  }
+
+  onClientResponse(action, client_idx) {
+    if (client_idx == -1)
+      return
+    if (action == "start_response") {
+      let client_node = "#client_" + client_idx
+      $(client_node).removeClass("badge-danger")
+      $(client_node).addClass("badge-warning")
+    } else if (action == "stop_response") {
+      let client_node = "#client_" + client_idx
+      $(client_node).removeClass("badge-danger")
+      $(client_node).addClass("badge-success")
+    } else if (action == "finish") {
+      let client_node = "#client_" + client_idx
+      $(client_node).removeClass("badge-warning")
+      $(client_node).addClass("badge-success")
+    }
+  }
+
+  onClientSendFinish(client_idx) {
+
   }
 
   setSendingStatus(status) {
@@ -291,6 +338,10 @@ class FileTransferModel {
       client.setEncoding('utf8');
       client.write(JSON.stringify(notifyMessage));
     }
+
+    this.observers.forEach((item, index, array)=>{
+      item.onNotifyAllClient(action, this.clientGroup)
+    })
   }
 
   removeClient(client) {
@@ -305,6 +356,15 @@ class FileTransferModel {
     this.observers.forEach((item, index, array)=>{
       item.onClientUpdate(this.clientGroup)
     })
+  }
+
+  getClientIndex(client) {
+    return this.clientGroup.indexOf(client)
+  }
+
+  sendConnectResponse(socket, index) {
+    let responseMessage = {"action": "connect", "index": index};
+    socket.write(JSON.stringify(responseMessage))
   }
 
   showTransferFinishResult() {
@@ -322,11 +382,19 @@ class FileTransferModel {
       ShowLog('connect: ' + socket.remoteAddress + ' : ' + socket.remotePort);
       socket.setNoDelay(true)
       this.addClient(socket);
+      this.sendConnectResponse(socket, this.getClientIndex(socket))
 
       socket.on('data', (data)=>{
         let message = JSON.parse(data)
-        if (message["action"] == "finish")
+        if (message["action"] == "finish") {
           this.transferFinishList.push(message["data"]["duration"]);
+        }
+
+        let client_index = this.getClientIndex(socket)
+        this.observers.forEach((item, index, array)=>{
+          item.onClientResponse(message["action"], client_index)
+        })
+
         ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ': ' + data);
       });
 

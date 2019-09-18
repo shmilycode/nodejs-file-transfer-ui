@@ -167,11 +167,15 @@ class FileTransferClientModel{
       console.log(info)
       let message = String.fromCharCode.apply(null, new Uint8Array(info.data));
       message = JSON.parse(message);
-      if (message["action"] == "start") {
+      if (message["action"] == "connect") {
+        this.clientIndex = message["index"]
+        this.observers.forEach((item, index, array)=>{
+          item.onClientIndexUpdate(this.clientIndex)
+        })
+      } else if (message["action"] == "start") {
         this.handleActionStart(message, this.pathToSave);
       } else if (message["action"] == "stop") {
-        this.closeChannel();
-        this.observers.forEach((item, index, array)=>{item.onReceiveFinish()})
+        this.handleActionStop(message)
       }
     });
 
@@ -194,6 +198,21 @@ class FileTransferClientModel{
     } else {
       this.ReceiveReliable(transferServerIp, transferServerPort, pathToSave);
     }
+    let result = {"action": "start_response"}
+    this.ShowLog(JSON.stringify(result));
+    chrome.sockets.tcp.send(this.connection, this.str2ab(JSON.stringify(result)), (info)=>{
+      this.ShowLog("Notify server result " + info.resultCode);
+    });
+  }
+
+  handleActionStop(message) {
+    this.closeChannel();
+    this.observers.forEach((item, index, array)=>{item.onReceiveFinish()})
+    let result = {"action": "stop_response"}
+    this.ShowLog(JSON.stringify(result));
+    chrome.sockets.tcp.send(this.connection, this.str2ab(JSON.stringify(result)), (info)=>{
+      this.ShowLog("Notify server result " + info.resultCode);
+    });
   }
 
   registerObserver(observer) {

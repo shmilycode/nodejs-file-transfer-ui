@@ -98,6 +98,10 @@ class FileTransferClientView {
     }
   }
 
+  onClientIndexUpdate(clientIndex) {
+    $("#index_header").html(clientIndex)
+  }
+
   registerChooseFolderButton() {
     $("#chooseFolderButton").on("click", ()=>{
       chrome.fileSystem.chooseEntry({type: "openDirectory"}, (entry)=>{
