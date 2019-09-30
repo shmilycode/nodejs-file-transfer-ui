@@ -28,6 +28,7 @@ chrome.runtime.onSuspend.addListener(function() {
 class FileTransferClientModel{
   constructor(){
     this.channelId = -1;
+    this.httpRequest = null
     this.heartbeatPeriod=30
     this.observers = new Array();
     this.connection = null;
@@ -80,6 +81,13 @@ class FileTransferClientModel{
     return transferEndTime - this.transferStartTime
   }
 
+  notifyServer(message) {
+    this.ShowLog(message);
+    chrome.sockets.tcp.send(this.connection, this.str2ab(message), (info)=>{
+      this.ShowLog("Notify server result " + info.resultCode);
+    });
+  }
+
   ReceiveUnreliable(serverIp, serverPort, multicastIp, multicastPort, path) {
     this.ShowLog("Start multicast receive.");
     if (this.channelId != -1) {
@@ -97,10 +105,7 @@ class FileTransferClientModel{
               this.ShowLog("Receive file failed, error code: "+status);
           } else {
               let result = {"action": "finish", "data":{"duration": this.getTransferDuration()}}
-              this.ShowLog(JSON.stringify(result));
-              chrome.sockets.tcp.send(this.connection, this.str2ab(JSON.stringify(result)), (info)=>{
-                this.ShowLog("Notify server result " + info.resultCode);
-              });
+              this.notifyServer(JSON.stringify(result))
           }
           this.closeChannel();
           this.observers.forEach((item, index, array)=>{item.onReceiveFinish()})
@@ -127,10 +132,7 @@ class FileTransferClientModel{
               this.ShowLog("Receive file failed, error code: "+status);
           } else {
               let result = {"action": "finish", "data":{"duration": this.getTransferDuration()}}
-              this.ShowLog(JSON.stringify(result));
-              chrome.sockets.tcp.send(this.connection, this.str2ab(JSON.stringify(result)), (info)=>{
-                this.ShowLog("Notify server result " + info.resultCode);
-              });
+              this.notifyServer(JSON.stringify(result))
           }
           this.closeChannel();
         });
@@ -153,16 +155,15 @@ class FileTransferClientModel{
       success: (data)=>{
         this.ShowLog("Receive " + data.length)
         let result = {"action": "finish", "data":{"duration": this.getTransferDuration()}}
-        this.ShowLog(JSON.stringify(result));
-        chrome.sockets.tcp.send(this.connection, this.str2ab(JSON.stringify(result)), (info)=>{
-          this.ShowLog("Notify server result " + info.resultCode);
-        });
+        this.notifyServer(JSON.stringify(result))
       },
       error:(XMLHttpRequest, textStatus, errorThrown)=>{
         this.ShowLog("Send http request failed! " +  textStatus + ":" + errorThrown)
+        let result = {"action": "finish", "data":{"duration": 0}}
+        this.notifyServer(JSON.stringify(result))
       }
     };
-    $.ajax(requestContent);
+    this.httpRequest = $.ajax(requestContent)
   }
 
   str2ab(str) {
@@ -223,9 +224,12 @@ class FileTransferClientModel{
         this.ReceiveUnreliable(transferServerIp, transferServerPort, multicastIp, multicastPort, pathToSave);
     } else if (protocol == "tcp") {
       this.ReceiveReliable(transferServerIp, transferServerPort, pathToSave);
-    } else {
+    } else if (protocol == "http"){
       let filename = message["data"]["filename"]
       this.ReceiveFromHttp(transferServerIp, transferServerPort, filename, pathToSave)
+    } else {
+      this.ShowLog("Unknown protocol "+protocol)
+      return
     }
     let result = {"action": "start_response"}
     this.ShowLog(JSON.stringify(result));
@@ -236,6 +240,10 @@ class FileTransferClientModel{
 
   handleActionStop(message) {
     this.closeChannel();
+    if (this.httpRequest != null) {
+      this.httpRequest.abort()
+      this.httpRequest = null
+    }
     this.observers.forEach((item, index, array)=>{item.onReceiveFinish()})
     let result = {"action": "stop_response"}
     this.ShowLog(JSON.stringify(result));

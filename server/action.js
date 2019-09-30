@@ -95,6 +95,8 @@ class FileTransferView {
         return false;
       this.serverIp = $('#serverIp').val();
       this.controller.startServer(this.serverIp, 6669);
+      if (this.protocol == Protocol.http)
+        this.controller.startHttpServer(this.serverIp, this.serverPort)
       this.storeAllSettings();
       return false;
     })
@@ -113,7 +115,7 @@ class FileTransferView {
         return false;
       this.serverIp = $('#serverIp').val();
       this.serverPort = Number($('#serverPort').val());
-      if (!this.protocol != Protocol.multicast) {
+      if (this.protocol != Protocol.multicast) {
         this.multicastIp = null;
         this.multicastPort = null;
       }
@@ -278,9 +280,11 @@ class FileTransferController {
     this.module.notifyAllClient(notifyMessage, "start");
   }
 
+  startHttpServer(serverIp, serverPort) {
+    this.module.startHttpServer(serverIp, serverPort)
+  }
   sendFileByHttp(serverIp, serverPort, filename) {
-    if (!this.module.startHttpServer(serverIp, serverPort))
-      return;
+    this.module.sendFileByHttp(serverIp, serverPort, filename)
     this.view.setSendingStatus(true);
     filename = iconv.decode(filename, 'gbk')
     let notifyMessage = {"action": "start", "data": 
@@ -342,7 +346,6 @@ class FileTransferModel {
     if (this.httpServer != null)
       return false
     ShowLog("SendFileByHTTP "+serverIp + ' ' + serverPort);
-    this.transferFinishList = new Array();
     this.httpServer = http.createServer((request, response)=>{
       let fileName = request.url.substr(1)
       if (fs.existsSync(fileName)) {
@@ -375,6 +378,11 @@ class FileTransferModel {
     }catch(e){
       ShowLog(e);
     }
+  }
+
+  sendFileByHttp(serverIp, serverPort, filename) {
+    ShowLog("SendFileByHttp "+serverIp + ' ' + serverPort + ' ' + iconv.decode(filename, 'gbk'));
+    this.transferFinishList = new Array();
   }
 
   notifyAllClient(notifyMessage, action) {
@@ -414,11 +422,16 @@ class FileTransferModel {
   }
 
   showTransferFinishResult() {
-    let sum = this.transferFinishList.length
-    let min = Math.min.apply(null, this.transferFinishList)/1000
-    let max = Math.max.apply(null, this.transferFinishList)/1000
-    let ave = this.transferFinishList.reduce((a,b)=>a+b)/sum/1000
-    ShowLog(sum + " finished. Min=" + min+"s. Max=" + max + "s."+" Ave="+ave+"s.")
+    let results = Array()
+    for (let i =0; i < this.transferFinishList.length; i++) {
+      if (this.transferFinishList[i] != 0)
+        results.push(this.transferFinishList[i])
+    }
+    let sum =results.length
+    let min = sum == 0 ? 0 : Math.min.apply(null, results)/1000
+    let max = sum == 0 ? 0 : Math.max.apply(null, results)/1000
+    let ave = sum == 0 ? 0 : results.reduce((a,b)=>a+b)/sum/1000
+    ShowLog(sum + " finished. Min=" + min+"s. Max=" + max + "s."+" Ave="+ ave+"s."+" loss="+ (this.transferFinishList.length-results.length))
   }
 
   startServer(ip, port) {
@@ -497,13 +510,7 @@ class FileTransferModel {
   }
 
   cancelSend() {
-    if (this.httpServer) {
-      this.httpServer.close(()=>{
-        ShowLog("Http Server closed!")
-        this.httpServer = null
-      })
-    }
-    else {
+    if (this.fileTransfer) {
       this.fileTransfer.closeFileTransferChannel();
       ShowLog("Close file transfer channel");
     }
