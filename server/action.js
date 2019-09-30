@@ -4,6 +4,10 @@ const LocalStorage = require('node-localstorage').LocalStorage
 const net = require('net')
 const dgram = require('dgram');
 const iconv = require('iconv-lite')
+const http = require('http')
+const fs = require('fs')
+const Path = require('path')
+
 let defaultDiscoveryAddress ="239.6.6.6"
 let defaultDiscoveryPort = 41234
 let logMessage = '';
@@ -41,6 +45,12 @@ window.addEventListener('keyup', (e) => {
     ipcRenderer.send('open-devtools')
 }, true)
 
+const Protocol = {
+    tcp: 0,
+    http: 1,
+    multicast: 2
+}
+
 class FileTransferView {
   constructor(controller, storage) {
     this.controller = controller;
@@ -50,13 +60,13 @@ class FileTransferView {
     this.multicastIp = null 
     this.multicastPort = null 
     this.fileToSend = null
-    this.useTCP = true
+    this.protocol = 0
     if (storage.length != 0) {
       this.serverIp = storage.getItem('serverIp')
       this.serverPort = storage.getItem('serverPort')
       this.multicastIp = storage.getItem('multicastIp')
       this.multicastPort = storage.getItem('multicastPort')
-      this.useTCP = storage.getItem('useTCP') == 'false'?false:true
+      this.protocol = Number(storage.getItem('protocol'))
     }
     this.registerStartServer();
     this.registerSendButton();
@@ -67,11 +77,8 @@ class FileTransferView {
     $('#serverPort').val(this.serverPort)
     $('#multicastIp').val(this.multicastIp)
     $('#multicastPort').val(this.multicastPort)
-    if (this.useTCP) {
-      $('#useTCP').attr('checked', 'checked')
-    }
-    $('#useTCP').change();
-    
+    $('#protocolRadios input:radio').eq(this.protocol).attr('checked', 'true')
+    $('#protocolRadios input:radio:checked').change()
     // Add the following code if you want the name of the file appear on select
     $(".custom-file-input").on("change", ()=>{
       let elem = $(".custom-file-input")
@@ -95,7 +102,7 @@ class FileTransferView {
 
   disableStartServer() {
     $('#serverIp').attr('disabled','disabled');
-    $('#useTCP').attr('disabled','disabled');
+    $('#protocolRadios input:radio').attr('disabled','disabled');
     $('#sendButton').removeAttr('hidden')
     $('#startServerButton').hide()
   }
@@ -106,7 +113,7 @@ class FileTransferView {
         return false;
       this.serverIp = $('#serverIp').val();
       this.serverPort = Number($('#serverPort').val());
-      if (this.useTCP) {
+      if (!this.protocol != Protocol.multicast) {
         this.multicastIp = null;
         this.multicastPort = null;
       }
@@ -117,11 +124,14 @@ class FileTransferView {
       this.fileToSend = $('#inputFile').prop('files')[0].path
       //encode filename to 'gbk', so that chinese string can be recognized.
       let tmp = iconv.encode(this.fileToSend, 'gbk')
-      if (this.useTCP)
+      if (this.protocol === Protocol.tcp)
         this.controller.sendFileByTCP(this.serverIp, this.serverPort, tmp);
-      else
+      else if (this.protocol === Protocol.multicast)
         this.controller.sendFileByMulticast(
             this.multicastIp, this.multicastPort, this.serverIp, this.serverPort, tmp);
+      else {
+        this.controller.sendFileByHttp(this.serverIp, this.serverPort, tmp)
+      }
       this.storeAllSettings();
       return false;
     })
@@ -135,9 +145,9 @@ class FileTransferView {
   }
 
   registerUseTCPCheckbox() {
-    $('#useTCP').change(()=>{
-      this.useTCP = $('#useTCP').prop("checked")
-      if (this.useTCP) {
+    $('#protocolRadios input:radio').change(()=>{
+      this.protocol = Number($('#protocolRadios input:radio:checked').val())
+      if (this.protocol != Protocol.multicast) {
         $('#multicastForm').attr('hidden', 'hidden')
       } else {
         $('#multicastForm').removeAttr('hidden')
@@ -215,7 +225,7 @@ class FileTransferView {
 
   checkInputs() {
     let elem = ['#serverIp', '#serverPort', '#inputFile'];
-    if (!this.useTCP) {
+    if (this.protocol === Protocol.multicast) {
       elem = elem.concat(['#multicastIp', '#multicastPort']);
     }
     for (let i = 0; i < elem.length; i++) {
@@ -236,8 +246,8 @@ class FileTransferView {
   storeAllSettings() {
     this.storage.setItem('serverIp', $('#serverIp').val())
     this.storage.setItem('serverPort', Number($('#serverPort').val()))
-    this.storage.setItem('useTCP', $('#useTCP').prop("checked"))
-    if(!this.useTCP) {
+    this.storage.setItem('protocol', $('#protocolRadios input:radio:checked').val())
+    if(this.protocol === Protocol.multicast) {
       this.storage.setItem('multicastIp', $('#multicastIp').val())
       this.storage.setItem('multicastPort', Number($('#multicastPort').val()))
     }
@@ -263,7 +273,19 @@ class FileTransferController {
   sendFileByTCP(serverIp, serverPort, filename) {
     this.view.setSendingStatus(true);
     this.module.sendFileByTCP(serverIp, serverPort, filename)
-    this.module.notifyAllClient(serverIp, serverPort, null, null, "start");
+    let notifyMessage = {"action": "start", "data": 
+        {"protocol": "tcp", "serverIp": serverIp, "serverPort": serverPort}};
+    this.module.notifyAllClient(notifyMessage, "start");
+  }
+
+  sendFileByHttp(serverIp, serverPort, filename) {
+    if (!this.module.startHttpServer(serverIp, serverPort))
+      return;
+    this.view.setSendingStatus(true);
+    filename = iconv.decode(filename, 'gbk')
+    let notifyMessage = {"action": "start", "data": 
+        {"protocol": "http", "serverIp": serverIp, "serverPort": serverPort, "filename": filename}};
+    this.module.notifyAllClient(notifyMessage, "start");
   }
 
   sendFileByMulticast(multicastIp, multicastPort, 
@@ -271,13 +293,17 @@ class FileTransferController {
     this.view.setSendingStatus(true);
     this.module.sendFileByMulticast(multicastIp, multicastPort, 
       serverIp, serverPort, filename)
-    this.module.notifyAllClient(serverIp, serverPort, multicastIp, multicastPort, "start");
+    let notifyMessage = {"action": "start", "data": 
+        {"protocol": "multicast", "serverIp": serverIp, "serverPort": serverPort, 
+         "multicastIp": multicastIp, "multicastPort": multicastPort}};
+    this.module.notifyAllClient(notifyMessage, "start");
   }
 
   cancelSend() {
     try{
       this.view.setSendingStatus(false)
-      this.module.notifyAllClient(null, null, null, null, "stop");
+      let notifyMessage = {"action": "stop"}
+      this.module.notifyAllClient(notifyMessage, "stop");
       this.module.cancelSend();
     } catch(err){ 
       console.log(err)
@@ -288,6 +314,7 @@ class FileTransferController {
 class FileTransferModel {
   constructor() {
     this.fileTransfer = new FileTransfer();
+    this.httpServer = null
     this.clientGroup = new Array();
     this.observers = new Array();
     this.transferFinishList = new Array();
@@ -295,6 +322,7 @@ class FileTransferModel {
     this.server = null;
     this.discoveryServer = null;
     this.discoveryTimer = null;
+    this.httpFileStreamCache = {}
   }
 
   sendFileByTCP(serverIp, serverPort, filename) {
@@ -303,15 +331,35 @@ class FileTransferModel {
     this.fileTransfer.createReliableChannel(serverIp, serverPort);
     try {
       this.fileTransfer.sendFile(filename)
-        .then(()=>{setTimeout(()=>{
-          ShowLog("Send finish");
-          this.showTransferFinishResult();
-        }, 3000)})
+        .then(()=>{})
         .catch((status)=>{ShowLog("Send failed " + status);});
     }catch(e){
       ShowLog(e);
     }
   };
+
+  startHttpServer(serverIp, serverPort) {
+    if (this.httpServer != null)
+      return false
+    ShowLog("SendFileByHTTP "+serverIp + ' ' + serverPort);
+    this.transferFinishList = new Array();
+    this.httpServer = http.createServer((request, response)=>{
+      let fileName = request.url.substr(1)
+      if (fs.existsSync(fileName)) {
+        // send it.
+        fs.createReadStream(fileName).pipe(response)
+      } else {
+        ShowLog("File " + fileName + " not existed!")
+        response.writeHead(404, {'Content-Type': 'text/plain'})
+        response.write('Error 404. File not found')
+        response.end()
+      }
+    }).listen({
+      host: serverIp,
+      port: serverPort
+    })
+    return true
+  }
 
   sendFileByMulticast(multicastIp, multicastPort, 
       serverIp, serverPort, filename) {
@@ -329,9 +377,7 @@ class FileTransferModel {
     }
   }
 
-  notifyAllClient(serverIp, serverPort, multicastIp, multicastPort, action) {
-    let notifyMessage = {"action": action, "data": {"serverIp": serverIp, "serverPort": serverPort, 
-                    "multicastIp": multicastIp, "multicastPort": multicastPort}};
+  notifyAllClient(notifyMessage, action) {
     ShowLog("Send "+JSON.stringify(notifyMessage))
     for(let idx = 0; idx < this.clientGroup.length; idx++) {
       let client = this.clientGroup[idx];
@@ -385,17 +431,18 @@ class FileTransferModel {
       this.sendConnectResponse(socket, this.getClientIndex(socket))
 
       socket.on('data', (data)=>{
+        ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ': ' + data);
         let message = JSON.parse(data)
         if (message["action"] == "finish") {
           this.transferFinishList.push(message["data"]["duration"]);
+          if (this.transferFinishList.length == this.clientGroup.length)
+            this.showTransferFinishResult();
         }
 
         let client_index = this.getClientIndex(socket)
         this.observers.forEach((item, index, array)=>{
           item.onClientResponse(message["action"], client_index)
         })
-
-        ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ': ' + data);
       });
 
       socket.on('error',(exception)=>{
@@ -450,8 +497,16 @@ class FileTransferModel {
   }
 
   cancelSend() {
-    this.fileTransfer.closeFileTransferChannel();
-    ShowLog("Close file transfer channel");
+    if (this.httpServer) {
+      this.httpServer.close(()=>{
+        ShowLog("Http Server closed!")
+        this.httpServer = null
+      })
+    }
+    else {
+      this.fileTransfer.closeFileTransferChannel();
+      ShowLog("Close file transfer channel");
+    }
   }
 
   registerObserver(observer) {

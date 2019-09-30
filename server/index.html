@@ -50,10 +50,19 @@
           </div>
           <label class="custom-file-label" for="inputFile" aria-describedby="inputGroupFileAddon02">Choose file</label>
       </div>
-
-      <div class="form-group form-check">
-        <input type="checkbox" class="form-check-input" id="useTCP">
-        <label class="form-check-label"> Use TCP</label>
+      <div id="protocolRadios">
+        <div class="form-group form-check form-check-inline">
+          <input type="radio" class="form-check-input" id="useTCP" value=0 name="inlineRadioOptions">
+          <label class="form-check-label">TCP</label>
+        </div>
+        <div class="form-group form-check form-check-inline">
+          <input type="radio" class="form-check-input" id="useHTTP" value=1 name="inlineRadioOptions">
+          <label class="form-check-label">HTTP</label>
+        </div>
+        <div class="form-group form-check form-check-inline">
+          <input type="radio" class="form-check-input" id="useMulticast" value=2 name="inlineRadioOptions">
+          <label class="form-check-label">Multicast</label>
+        </div>
       </div>
 
       <div class="form-group">

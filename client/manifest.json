@@ -20,7 +20,8 @@
     "fileSystem",
     "fileSystem.directory",
     "seewoos.fileTransfer",
-    "storage"
+    "storage",
+    "http://*/"
   ],
   "sockets": {
     "tcp": {

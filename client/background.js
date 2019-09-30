@@ -140,6 +140,31 @@ class FileTransferClientModel{
     })
   }
 
+  ReceiveFromHttp(serverIp, serverPort, filename, path) {
+    this.ShowLog("Start http client!")
+    let xhr = new XMLHttpRequest();
+    let url = "http://" + serverIp + ":" + serverPort + "/" + filename
+    this.ShowLog("Get " + url)
+    this.transferTrace();
+    var requestContent = {
+           timeout: 60000, // try 60s
+           url: url,
+           type: "GET",
+      success: (data)=>{
+        this.ShowLog("Receive " + data.length)
+        let result = {"action": "finish", "data":{"duration": this.getTransferDuration()}}
+        this.ShowLog(JSON.stringify(result));
+        chrome.sockets.tcp.send(this.connection, this.str2ab(JSON.stringify(result)), (info)=>{
+          this.ShowLog("Notify server result " + info.resultCode);
+        });
+      },
+      error:(XMLHttpRequest, textStatus, errorThrown)=>{
+        this.ShowLog("Send http request failed! " +  textStatus + ":" + errorThrown)
+      }
+    };
+    $.ajax(requestContent);
+  }
+
   str2ab(str) {
     var buf = new ArrayBuffer(str.length); // 2 bytes for each char
     var bufView = new Uint8Array(buf);
@@ -189,14 +214,18 @@ class FileTransferClientModel{
 
   handleActionStart(message, pathToSave) {
     this.ShowLog("recv " + message)
+    let protocol = message["data"]["protocol"]
     let transferServerIp = message["data"]["serverIp"]
     let transferServerPort = message["data"]["serverPort"]
-    let multicastIp = message["data"]["multicastIp"]
-    let multicastPort = message["data"]["multicastPort"]
-    if (multicastIp) {
-      this.ReceiveUnreliable(transferServerIp, transferServerPort, multicastIp, multicastPort, pathToSave);
-    } else {
+    if (protocol == "multicast") {
+      let multicastIp = message["data"]["multicastIp"]
+      let multicastPort = message["data"]["multicastPort"]
+        this.ReceiveUnreliable(transferServerIp, transferServerPort, multicastIp, multicastPort, pathToSave);
+    } else if (protocol == "tcp") {
       this.ReceiveReliable(transferServerIp, transferServerPort, pathToSave);
+    } else {
+      let filename = message["data"]["filename"]
+      this.ReceiveFromHttp(transferServerIp, transferServerPort, filename, pathToSave)
     }
     let result = {"action": "start_response"}
     this.ShowLog(JSON.stringify(result));
