@@ -97,6 +97,8 @@ class FileTransferView {
       this.controller.startServer(this.serverIp, 6669);
       if (this.protocol == Protocol.http)
         this.controller.startHttpServer(this.serverIp, this.serverPort)
+      else
+        this.controller.startFileTransferServer(this.serverIp, this.serverPort)
       this.storeAllSettings();
       return false;
     })
@@ -283,6 +285,10 @@ class FileTransferController {
   startHttpServer(serverIp, serverPort) {
     this.module.startHttpServer(serverIp, serverPort)
   }
+
+  startFileTransferServer(serverIp, serverPort) {
+    this.module.startFileTransferServer(serverIp, serverPort)
+  }
   sendFileByHttp(serverIp, serverPort, filename) {
     this.module.sendFileByHttp(serverIp, serverPort, filename)
     this.view.setSendingStatus(true);
@@ -317,7 +323,7 @@ class FileTransferController {
 
 class FileTransferModel {
   constructor() {
-    this.fileTransfer = new FileTransfer();
+    this.fileTransfer = null
     this.httpServer = null
     this.clientGroup = new Array();
     this.observers = new Array();
@@ -341,6 +347,10 @@ class FileTransferModel {
       ShowLog(e);
     }
   };
+
+  startFileTransferServer(serverIp, serverPort) {
+    this.fileTransfer = new FileTransfer();
+  }
 
   startHttpServer(serverIp, serverPort) {
     if (this.httpServer != null)
@@ -434,6 +444,27 @@ class FileTransferModel {
     ShowLog(sum + " finished. Min=" + min+"s. Max=" + max + "s."+" Ave="+ ave+"s."+" loss="+ (this.transferFinishList.length-results.length))
   }
 
+  ParseMessageFromClient(socket, data) {
+    let data_length = data.length
+    let start_index = 0
+    while(start_index != data_length) {
+      let end_index = data.indexOf(';;', start_index)
+      let message = JSON.parse(data.substring(start_index, end_index))
+      if (message["action"] == "finish") {
+        this.transferFinishList.push(message["data"]["duration"]);
+        if (this.transferFinishList.length == this.clientGroup.length)
+          this.showTransferFinishResult();
+      }
+
+      let client_index = this.getClientIndex(socket)
+      this.observers.forEach((item, index, array)=>{
+        item.onClientResponse(message["action"], client_index)
+      })
+
+      start_index = end_index + 2
+    }
+  }
+
   startServer(ip, port) {
     //server
     this.serverIp = ip
@@ -445,17 +476,7 @@ class FileTransferModel {
 
       socket.on('data', (data)=>{
         ShowLog(socket.remoteAddress + ' : ' + socket.remotePort + ': ' + data);
-        let message = JSON.parse(data)
-        if (message["action"] == "finish") {
-          this.transferFinishList.push(message["data"]["duration"]);
-          if (this.transferFinishList.length == this.clientGroup.length)
-            this.showTransferFinishResult();
-        }
-
-        let client_index = this.getClientIndex(socket)
-        this.observers.forEach((item, index, array)=>{
-          item.onClientResponse(message["action"], client_index)
-        })
+        this.ParseMessageFromClient(socket, data)
       });
 
       socket.on('error',(exception)=>{

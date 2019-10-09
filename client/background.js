@@ -83,6 +83,7 @@ class FileTransferClientModel{
 
   notifyServer(message) {
     this.ShowLog(message);
+    message += ";;"
     chrome.sockets.tcp.send(this.connection, this.str2ab(message), (info)=>{
       this.ShowLog("Notify server result " + info.resultCode);
     });
@@ -232,10 +233,7 @@ class FileTransferClientModel{
       return
     }
     let result = {"action": "start_response"}
-    this.ShowLog(JSON.stringify(result));
-    chrome.sockets.tcp.send(this.connection, this.str2ab(JSON.stringify(result)), (info)=>{
-      this.ShowLog("Notify server result " + info.resultCode);
-    });
+    this.notifyServer(JSON.stringify(result))
   }
 
   handleActionStop(message) {
@@ -246,10 +244,7 @@ class FileTransferClientModel{
     }
     this.observers.forEach((item, index, array)=>{item.onReceiveFinish()})
     let result = {"action": "stop_response"}
-    this.ShowLog(JSON.stringify(result));
-    chrome.sockets.tcp.send(this.connection, this.str2ab(JSON.stringify(result)), (info)=>{
-      this.ShowLog("Notify server result " + info.resultCode);
-    });
+    this.notifyServer(JSON.stringify(result))
   }
 
   registerObserver(observer) {
